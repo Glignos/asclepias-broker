@@ -11,7 +11,7 @@ from typing import List, Optional
 
 from celery import shared_task
 from invenio_db import db
-
+from default
 from .proxies import current_harvester
 
 
@@ -60,3 +60,28 @@ def harvest_events(harvester_ids: List[str], eager: bool = False):
             with db.session.begin_nested():
                 harvester.harvest(eager=eager)
             db.session.commit()
+
+
+@shared_task(ignore_result=True)
+def harvest_joss_data():
+    """."""
+    import os
+    import sys
+    from pyingest.parsers.joss import JOSSParser
+    from pyingest.serializers.classic import Tagged
+    from invenio_cache import current_cache
+
+    rss_url = 'https://joss.theoj.org/papers/published.atom'
+    parser = JOSSParser()
+    last_run = current_cache.get('last_joss_run')
+    current_cache.set('last_joss_run', datetime.now())
+    page = 1
+    if last_run:
+        documents = parser.parse(rss_url, since=str(last_run.date()), page=1)
+    else:
+        documents = parser.parse(rss_url, page=page)
+
+    for doc in document:
+        joss_doi = doc['properties']['DOI']
+        zenodo_doi = doc['properties']['data'].split('/')[-1]
+
